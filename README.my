@@ -41,3 +41,20 @@ Q1. How do I clean kafka/zookeeper back to a pristine/fresh state on dev machine
  A1. Stop all running instances of zookeeper and kafka and then remove their data logs
    prompt> kill -9 <kafka_pid> <zookeeper_pid>
    prompt> rm -rf /tmp/kafka-logs /tmp/zookeeper
+
+Q2. How to merge upstream changes from main kafka project
+
+Step 1) Checkout from tag, e.g.,
+
+git show-ref --tags
+git checkout refs/tags/0.8.1.1 -b tags_0.8.1.1
+
+Step 2) Merge build.gradle gradle.properties manually from master branch
+
+Step 3) git branch -D master
+
+Step 3) git checkout remotes/github/master -b master
+
+Step 4) git reset --hard tags_0.8.1.1
+
+Step 5) git push github +master:master
