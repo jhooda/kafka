@@ -50,9 +50,23 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
     }
   }
 
+  def getControllerID(): Int = {
+    readDataMaybeNull(controllerContext.zkClient, electionPath)._1 match {
+       case Some(controller) => KafkaController.parseControllerId(controller)
+       case None => -1
+    }
+  }
+    
+  def controllerExists(): Boolean = getControllerID != -1
+
   def elect: Boolean = {
     val timestamp = SystemTime.milliseconds.toString
     val electString = Json.encode(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp))
+
+    if(controllerExists) {
+       debug("A leader has been elected, so stopping the election process.")
+       return amILeader
+    }
 
     try {
       createEphemeralPathExpectConflictHandleZKBug(controllerContext.zkClient, electionPath, electString, brokerId,
@@ -64,15 +78,13 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
     } catch {
       case e: ZkNodeExistsException =>
         // If someone else has written the path, then
-        leaderId = readDataMaybeNull(controllerContext.zkClient, electionPath)._1 match {
-          case Some(controller) => KafkaController.parseControllerId(controller)
-          case None => {
-            warn("A leader has been elected but just resigned, this will result in another round of election")
-            -1
-          }
-        }
+        leaderId = getControllerID 
+
         if (leaderId != -1)
           debug("Broker %d was elected as leader instead of broker %d".format(leaderId, brokerId))
+        else
+          warn("A leader has been elected but just resigned, this will result in another round of election")
+
       case e2: Throwable =>
         error("Error while electing or becoming leader on broker %d".format(brokerId), e2)
         resign()
