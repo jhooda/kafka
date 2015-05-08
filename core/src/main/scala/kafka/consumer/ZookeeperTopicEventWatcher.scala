@@ -23,7 +23,7 @@ import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
 class ZookeeperTopicEventWatcher(val zkClient: ZkClient,
-    val eventHandler: TopicEventHandler[String]) extends Logging {
+    val eventHandler: TopicEventHandler[String], config: ConsumerConfig) extends Logging {
 
   val lock = new Object()
 
@@ -64,8 +64,11 @@ class ZookeeperTopicEventWatcher(val zkClient: ZkClient,
       lock.synchronized {
         try {
           if (zkClient != null) {
-            val latestTopics = zkClient.getChildren(ZkUtils.BrokerTopicsPath).toList
-            debug("all topics: %s".format(latestTopics))
+            var latestTopics:Seq[String] = null
+            if (config.verifyFilterTopics) {
+              latestTopics = zkClient.getChildren(ZkUtils.BrokerTopicsPath).toList
+            }
+            debug("verifyTopics: %s, all topics: %s".format(config.verifyFilterTopics, latestTopics))
             eventHandler.handleTopicEvent(latestTopics)
           }
         }

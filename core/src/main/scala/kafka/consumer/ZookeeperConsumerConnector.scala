@@ -942,12 +942,16 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
      * Topic events will trigger subsequent synced rebalances.
      */
     info("Creating topic event watcher for topics " + topicFilter)
-    wildcardTopicWatcher = new ZookeeperTopicEventWatcher(zkClient, this)
+    wildcardTopicWatcher = new ZookeeperTopicEventWatcher(zkClient, this, config)
 
     def handleTopicEvent(allTopics: Seq[String]) {
       debug("Handling topic event")
 
-      val updatedTopics = allTopics.filter(topic => topicFilter.isTopicAllowed(topic, config.excludeInternalTopics))
+      val updatedTopics = if (config.verifyFilterTopics) {
+        allTopics.filter(topic => topicFilter.isTopicAllowed(topic, config.excludeInternalTopics))
+      } else {
+        topicFilter.getRawRegexAsSeq()
+      }
 
       val addedTopics = updatedTopics filterNot (wildcardTopics contains)
       if (addedTopics.nonEmpty)

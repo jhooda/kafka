@@ -43,6 +43,8 @@ sealed abstract class TopicFilter(rawRegex: String) extends Logging {
   override def toString = regex
 
   def isTopicAllowed(topic: String, excludeInternalTopics: Boolean): Boolean
+
+  def getRawRegexAsSeq(): Seq[String] = regex.split('|')
 }
 
 case class Whitelist(rawRegex: String) extends TopicFilter(rawRegex) {
