@@ -185,8 +185,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     val canShutdown = isShuttingDown.compareAndSet(false, true)
     if (canShutdown) {
       info("ZKConsumerConnector shutting down")
-      val startTime = System.nanoTime()
-      KafkaMetricsGroup.removeAllConsumerMetrics(config.clientId)
+      var startTime = System.nanoTime()
       rebalanceLock synchronized {
         if (wildcardTopicWatcher != null)
           wildcardTopicWatcher.shutdown()
@@ -211,6 +210,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
             fatal("error during consumer connector shutdown", e)
         }
         info("ZKConsumerConnector shutdown completed in " + (System.nanoTime() - startTime) / 1000000 + " ms")
+        startTime = System.nanoTime()
+        // commented out for performance reasons
+        // KafkaMetricsGroup.removeAllConsumerMetrics(config.clientId)
+        info(s"""ZKConsumerConnector shutdown completed metrics in ${(System.nanoTime() - startTime) / 1000000} ms for clientId ${config.clientId}""")
       }
     }
   }
@@ -624,7 +627,13 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
               }
               // stop all fetchers and clear all the queues to avoid data duplication
               closeFetchersForQueues(cluster, kafkaMessageAndMetadataStreams, topicThreadIdAndQueues.map(q => q._2))
+              if(isShuttingDown.get())  {
+                return
+              }
               Thread.sleep(config.rebalanceBackoffMs)
+              if(isShuttingDown.get())  {
+                return
+              }
             }
           }
         }

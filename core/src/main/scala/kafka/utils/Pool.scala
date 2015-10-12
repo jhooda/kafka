@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -25,18 +25,18 @@ import kafka.common.KafkaException
 import java.lang.Object
 
 
-class Pool[K,V](valueFactory: Option[(K) => V] = None) extends Iterable[(K, V)] {
+class Pool[K, V](valueFactory: Option[(K) => V] = None) extends Iterable[(K, V)] {
 
   private val pool = new ConcurrentHashMap[K, V]
-  private val createLock = new Object
+  private val keyLockMap = new ConcurrentHashMap[K, AnyRef]
 
   def this(m: collection.Map[K, V]) {
     this()
     m.foreach(kv => pool.put(kv._1, kv._2))
   }
-  
+
   def put(k: K, v: V) = pool.put(k, v)
-  
+
   def putIfNotExists(k: K, v: V) = pool.putIfAbsent(k, v)
 
   /**
@@ -55,7 +55,10 @@ class Pool[K,V](valueFactory: Option[(K) => V] = None) extends Iterable[(K, V)] 
       throw new KafkaException("Empty value factory in pool.")
     val curr = pool.get(key)
     if (curr == null) {
-      createLock synchronized {
+      val keyLockNew = new Object()
+      var keyLock = keyLockMap.putIfAbsent(key, keyLockNew)
+      if (keyLock == null) keyLock = keyLockNew
+      keyLock synchronized {
         val curr = pool.get(key)
         if (curr == null)
           pool.put(key, valueFactory.get(key))
@@ -67,36 +70,36 @@ class Pool[K,V](valueFactory: Option[(K) => V] = None) extends Iterable[(K, V)] 
   }
 
   def contains(id: K) = pool.containsKey(id)
-  
+
   def get(key: K): V = pool.get(key)
-  
+
   def remove(key: K): V = pool.remove(key)
-  
+
   def keys: mutable.Set[K] = {
     import JavaConversions._
     pool.keySet()
   }
-  
+
   def values: Iterable[V] = {
     import JavaConversions._
     new ArrayList[V](pool.values())
   }
-  
+
   def clear() { pool.clear() }
-  
+
   override def size = pool.size
-  
+
   override def iterator = new Iterator[(K,V)]() {
-    
+
     private val iter = pool.entrySet.iterator
-    
+
     def hasNext: Boolean = iter.hasNext
-    
+
     def next: (K, V) = {
       val n = iter.next
       (n.getKey, n.getValue)
     }
-    
+
   }
-    
+
 }
