@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,6 +19,47 @@
 import kafka.common._
 import scala.collection._
 import util.parsing.json.JSON
+import scala.util.parsing.json._
+
+// copied implementation of JSON object from standard lib, but make it a class
+class SafeJSON extends Parser {
+
+  private def unRaw (in : Any) : Any = in match {
+    case JSONObject(obj) => obj.map({ case (k,v) => (k,unRaw(v))}).toList
+    case JSONArray(list) => list.map(unRaw)
+    case x => x
+  }
+
+  def parseRaw(input : String) : Option[JSONType] =
+    phrase(root)(new lexical.Scanner(input)) match {
+      case Success(result, _) => Some(result)
+      case _ => None
+    }
+
+  def parseFull(input: String): Option[Any] =
+    parseRaw(input) match {
+      case Some(data) => Some(resolveType(data))
+      case None => None
+    }
+
+  def resolveType(input: Any): Any = input match {
+    case JSONObject(data) => data.transform {
+      case (k,v) => resolveType(v)
+    }
+    case JSONArray(data) => data.map(resolveType)
+    case x => x
+  }
+
+  val myConversionFunc = {input : String => input.toInt}
+
+  def globalNumberParser : NumericParser = myConversionFunc
+
+  def perThreadNumberParser : NumericParser = myConversionFunc
+
+}
+
+// SafeJSON behaves like JSON from standard lib, but stores per-thread parser instances
+// in a thread-local variable and then delegates method calls to the appropriate parser instance.
 
 /**
  *  A wrapper that synchronizes JSON in scala, which is not threadsafe.
@@ -41,13 +82,29 @@ object Json extends Logging {
       }
     }
   }
-  
+
+  private val parser = new ThreadLocal[SafeJSON] {
+    override def initialValue = new SafeJSON
+  }
+
+  /**
+   * Parse a JSON string into an object
+   */
+  def parseFullNEW(input: String): Option[Any] = {
+    try {
+      parser.get.parseFull(input)
+    } catch {
+      case t: Throwable =>
+        throw new KafkaException("Can't parse json string: %s".format(input), t)
+    }
+  }
+
   /**
    * Encode an object into a JSON string. This method accepts any type T where
    *   T => null | Boolean | String | Number | Map[String, T] | Array[T] | Iterable[T]
    * Any other type will result in an exception.
-   * 
-   * This method does not properly handle non-ascii characters. 
+   *
+   * This method does not properly handle non-ascii characters.
    */
   def encode(obj: Any): String = {
     obj match {
@@ -55,13 +112,13 @@ object Json extends Logging {
       case b: Boolean => b.toString
       case s: String => "\"" + s + "\""
       case n: Number => n.toString
-      case m: Map[_, _] => 
-        "{" + 
-          m.map(elem => 
+      case m: Map[_, _] =>
+        "{" +
+          m.map(elem =>
             elem match {
             case t: Tuple2[_,_] => encode(t._1) + ":" + encode(t._2)
             case _ => throw new IllegalArgumentException("Invalid map element (" + elem + ") in " + obj)
-          }).mkString(",") + 
+          }).mkString(",") +
       "}"
       case a: Array[_] => encode(a.toSeq)
       case i: Iterable[_] => "[" + i.map(encode).mkString(",") + "]"
