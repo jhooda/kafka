@@ -104,18 +104,19 @@ class SimpleConsumer(val host: String,
    *  @return a set of fetched messages
    */
   def fetch(request: FetchRequest): FetchResponse = {
-    var response: Receive = null
-    val specificTimer = fetchRequestAndResponseStats.getFetchRequestAndResponseStats(host, port).requestTimer
-    val aggregateTimer = fetchRequestAndResponseStats.getFetchRequestAndResponseAllBrokersStats.requestTimer
-    aggregateTimer.time {
-      specificTimer.time {
-        response = sendRequest(request)
-      }
-    }
+    // CGB-6814 var response: Receive = null
+    // CGB-6814 val specificTimer = fetchRequestAndResponseStats.getFetchRequestAndResponseStats(host, port).requestTimer
+    // CGB-6814 val aggregateTimer = fetchRequestAndResponseStats.getFetchRequestAndResponseAllBrokersStats.requestTimer
+    // CGB-6814 aggregateTimer.time {
+    // CGB-6814   specificTimer.time {
+    // CGB-6814     response = sendRequest(request)
+    // CGB-6814   }
+    // CGB-6814 }
+    val response = sendRequest(request)
     val fetchResponse = FetchResponse.readFrom(response.buffer)
-    val fetchedSize = fetchResponse.sizeInBytes
-    fetchRequestAndResponseStats.getFetchRequestAndResponseStats(host, port).requestSizeHist.update(fetchedSize)
-    fetchRequestAndResponseStats.getFetchRequestAndResponseAllBrokersStats.requestSizeHist.update(fetchedSize)
+    // CGB-6814 val fetchedSize = fetchResponse.sizeInBytes
+    // CGB-6814 fetchRequestAndResponseStats.getFetchRequestAndResponseStats(host, port).requestSizeHist.update(fetchedSize)
+    // CGB-6814 fetchRequestAndResponseStats.getFetchRequestAndResponseAllBrokersStats.requestSizeHist.update(fetchedSize)
     fetchResponse
   }
 

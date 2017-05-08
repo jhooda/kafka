@@ -598,7 +598,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
     def syncedRebalance() {
       rebalanceLock synchronized {
-        rebalanceTimer.time {
+        // CGB-6814 rebalanceTimer.time {
           if(isShuttingDown.get())  {
             return
           } else {
@@ -636,7 +636,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
               }
             }
           }
-        }
+        // CGB-6814 }
       }
 
       throw new ConsumerRebalanceFailedException(consumerIdString + " can't rebalance after " + config.rebalanceMaxRetries +" retries")
