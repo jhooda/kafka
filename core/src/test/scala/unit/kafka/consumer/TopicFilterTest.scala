@@ -46,7 +46,7 @@ class TopicFilterTest extends JUnitSuite {
 
     val topicFilter4 = new Whitelist("test-(?!bad\\b)[\\w]+")
     assertTrue(topicFilter4.isTopicAllowed("test-good", excludeInternalTopics = true))
-    assertFalse(topicFilter4.isTopicAllowed("test-bad", excludeInternalTopics = true))    
+    assertFalse(topicFilter4.isTopicAllowed("test-bad", excludeInternalTopics = true))
   }
 
   @Test
@@ -64,7 +64,10 @@ class TopicFilterTest extends JUnitSuite {
   @Test
   def testWildcardTopicCountGetTopicCountMapEscapeJson() {
     def getTopicCountMapKey(regex: String): String = {
-      val topicCount = new WildcardTopicCount(null, "consumerId", new Whitelist(regex), 1, true)
+      val props = new java.util.Properties()
+      props.setProperty("exclude.internal.topics", "true")
+      props.setProperty("verify.filter.topics", "true")
+      val topicCount = new WildcardTopicCount(null, "consumerId", new Whitelist(regex), 1, new ConsumerConfig(props))
       topicCount.getTopicCountMap.head._1
     }
     //lets make sure that the JSON strings are escaping as we expect
@@ -81,5 +84,5 @@ class TopicFilterTest extends JUnitSuite {
     assertEquals("-\\\\u001f-", getTopicCountMapKey("-\\u001f-"))
     assertEquals("-\\\\u007f-", getTopicCountMapKey("-\\u007f-"))
     assertEquals("-\\\\u009f-", getTopicCountMapKey("-\\u009f-"))
-  }    
+  }
 }

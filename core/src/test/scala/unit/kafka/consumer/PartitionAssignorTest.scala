@@ -43,7 +43,7 @@ class PartitionAssignorTest extends JUnit3Suite with Logging {
       val topicPartitionCounts = Map((1 to topicCount).map(topic => {
         ("topic-" + topic, PartitionAssignorTest.MinPartitionCount.max(TestUtils.random.nextInt(PartitionAssignorTest.MaxPartitionCount)))
       }).toSeq:_*)
-      
+
       val subscriptions = Map((1 to consumerCount).map(consumer => {
         val streamCount = 1.max(TestUtils.random.nextInt(PartitionAssignorTest.MaxStreamCount + 1))
         ("g1c" + consumer, WildcardSubscriptionInfo(streamCount, ".*", isWhitelist = true))
@@ -163,7 +163,10 @@ private object PartitionAssignorTest extends Logging {
   private def assignAndVerify(scenario: Scenario, assignor: PartitionAssignor, zkClient: ZkClient,
                               verifyAssignmentIsUniform: Boolean = false) {
     val assignments = scenario.subscriptions.map{ case(consumer, subscription)  =>
-      val ctx = new AssignmentContext("g1", consumer, excludeInternalTopics = true, zkClient)
+      val props = new java.util.Properties()
+      props.setProperty("exclude.internal.topics", "true")
+      props.setProperty("verify.filter.topics", "true")
+      val ctx = new AssignmentContext("g1", consumer, new ConsumerConfig(props), zkClient)
       assignor.assign(ctx)
     }
 

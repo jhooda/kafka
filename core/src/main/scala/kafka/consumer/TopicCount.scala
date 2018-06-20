@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -56,7 +56,7 @@ private[kafka] object TopicCount extends Logging {
     consumerThreadIdsPerTopicMap
   }
 
-  def constructTopicCount(group: String, consumerId: String, zkClient: ZkClient, excludeInternalTopics: Boolean) : TopicCount = {
+  def constructTopicCount(group: String, consumerId: String, zkClient: ZkClient, config: ConsumerConfig) : TopicCount = {
     val dirs = new ZKGroupDirs(group)
     val topicCountString = ZkUtils.readData(zkClient, dirs.consumerRegistryDir + "/" + consumerId)._1
     var subscriptionPattern: String = null
@@ -94,15 +94,15 @@ private[kafka] object TopicCount extends Logging {
           new Whitelist(regex)
         else
           new Blacklist(regex)
-      new WildcardTopicCount(zkClient, consumerId, filter, numStreams, excludeInternalTopics)
+      new WildcardTopicCount(zkClient, consumerId, filter, numStreams, config)
     }
   }
 
   def constructTopicCount(consumerIdString: String, topicCount: Map[String, Int]) =
     new StaticTopicCount(consumerIdString, topicCount)
 
-  def constructTopicCount(consumerIdString: String, filter: TopicFilter, numStreams: Int, zkClient: ZkClient, excludeInternalTopics: Boolean) =
-    new WildcardTopicCount(zkClient, consumerIdString, filter, numStreams, excludeInternalTopics)
+  def constructTopicCount(consumerIdString: String, filter: TopicFilter, numStreams: Int, zkClient: ZkClient, config: ConsumerConfig) =
+    new WildcardTopicCount(zkClient, consumerIdString, filter, numStreams, config)
 
 }
 
@@ -129,10 +129,14 @@ private[kafka] class WildcardTopicCount(zkClient: ZkClient,
                                         consumerIdString: String,
                                         topicFilter: TopicFilter,
                                         numStreams: Int,
-                                        excludeInternalTopics: Boolean) extends TopicCount {
+                                        config: ConsumerConfig) extends TopicCount {
   def getConsumerThreadIdsPerTopic = {
-    val wildcardTopics = ZkUtils.getChildrenParentMayNotExist(zkClient, ZkUtils.BrokerTopicsPath)
-                         .filter(topic => topicFilter.isTopicAllowed(topic, excludeInternalTopics))
+    val wildcardTopics = if (config.verifyFilterTopics) {
+      ZkUtils.getChildrenParentMayNotExist(zkClient, ZkUtils.BrokerTopicsPath)
+        .filter(topic => topicFilter.isTopicAllowed(topic, config.excludeInternalTopics))
+    } else {
+      topicFilter.getRawRegexAsSeq()
+    }
     TopicCount.makeConsumerThreadIdsPerTopic(consumerIdString, Map(wildcardTopics.map((_, numStreams)): _*))
   }
 

@@ -17,9 +17,11 @@
 
 package kafka.tools
 
-import joptsimple.OptionParser
 import org.I0Itec.zkclient.ZkClient
-import kafka.utils.{Logging, ZKGroupTopicDirs, ZkUtils, ZKStringSerializer, CommandLineUtils}
+import kafka.utils._
+import kafka.consumer.ConsumerConfig
+import java.util.Properties
+import joptsimple.OptionParser
 
 object VerifyConsumerRebalance extends Logging {
   def main(args: Array[String]) {
@@ -30,7 +32,7 @@ object VerifyConsumerRebalance extends Logging {
     val groupOpt = parser.accepts("group", "Consumer group.").
       withRequiredArg().ofType(classOf[String])
     parser.accepts("help", "Print this message.")
-    
+
     if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "Validate that all partitions have a consumer for a given consumer group.")
 
@@ -76,7 +78,10 @@ object VerifyConsumerRebalance extends Logging {
      * This means that for each partition registered under /brokers/topics/[topic]/[broker-id], an owner exists
      * under /consumers/[consumer_group]/owners/[topic]/[broker_id-partition_id]
      */
-    val consumersPerTopicMap = ZkUtils.getConsumersPerTopic(zkClient, group, excludeInternalTopics = false)
+    val props = new Properties()
+    props.setProperty("exclude.internal.topics", "false")
+    props.setProperty("verify.filter.topics", "false")
+    val consumersPerTopicMap = ZkUtils.getConsumersPerTopic(zkClient, group, new ConsumerConfig(props))
     val partitionsPerTopicMap = ZkUtils.getPartitionsForTopics(zkClient, consumersPerTopicMap.keySet.toSeq)
 
     partitionsPerTopicMap.foreach { partitionsForTopic =>

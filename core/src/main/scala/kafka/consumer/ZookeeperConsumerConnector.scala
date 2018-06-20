@@ -644,7 +644,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
     private def rebalance(cluster: Cluster): Boolean = {
       val myTopicThreadIdsMap = TopicCount.constructTopicCount(
-        group, consumerIdString, zkClient, config.excludeInternalTopics).getConsumerThreadIdsPerTopic
+        group, consumerIdString, zkClient, config).getConsumerThreadIdsPerTopic
       val brokers = getAllBrokersInCluster(zkClient)
       if (brokers.size == 0) {
         // This can happen in a rare case when there are no brokers available in the cluster when the consumer is started.
@@ -665,7 +665,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
         releasePartitionOwnership(topicRegistry)
 
-        val assignmentContext = new AssignmentContext(group, consumerIdString, config.excludeInternalTopics, zkClient)
+        val assignmentContext = new AssignmentContext(group, consumerIdString, config, zkClient)
         val partitionOwnershipDecision = partitionAssignor.assign(assignmentContext)
         val currentTopicRegistry = new Pool[String, Pool[Int, PartitionTopicInfo]](
           valueFactory = Some((topic: String) => new Pool[Int, PartitionTopicInfo]))
@@ -935,13 +935,16 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         (queue, stream)
     }).toList
 
-     // bootstrap with existing topics
-    private var wildcardTopics =
+    // bootstrap with existing topics
+    private var wildcardTopics = if (config.verifyFilterTopics) {
       getChildrenParentMayNotExist(zkClient, BrokerTopicsPath)
         .filter(topic => topicFilter.isTopicAllowed(topic, config.excludeInternalTopics))
+    } else {
+      topicFilter.getRawRegexAsSeq()
+    }
 
     private val wildcardTopicCount = TopicCount.constructTopicCount(
-      consumerIdString, topicFilter, numStreams, zkClient, config.excludeInternalTopics)
+      consumerIdString, topicFilter, numStreams, zkClient, config)
 
     val dirs = new ZKGroupDirs(config.groupId)
     registerConsumerInZK(dirs, consumerIdString, wildcardTopicCount)
@@ -950,9 +953,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     /*
      * Topic events will trigger subsequent synced rebalances.
      */
-    info("Creating topic event watcher for topics " + topicFilter)
-    wildcardTopicWatcher = new ZookeeperTopicEventWatcher(zkClient, this, config)
-
+    if (config.verifyFilterTopics) {
+      info("Creating topic event watcher for topics " + topicFilter)
+      wildcardTopicWatcher = new ZookeeperTopicEventWatcher(zkClient, this, config)
+    }
     def handleTopicEvent(allTopics: Seq[String]) {
       debug("Handling topic event")
 
